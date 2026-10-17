@@ -98,35 +98,73 @@ function text(s, x, y, col, sc = 1, align = 'l', shadow = true) {
   }
 }
 
-// ---------------------------------------------------------------- level
-const MAP = [];
-for (let r = 0; r < ROWS; r++) MAP.push(Array(COLS).fill('.'));
-const fill = (r, a, b, ch) => { for (let c = a; c <= b; c++) MAP[r][c] = ch; };
-fill(2, 0, 39, '#');
-MAP[2][12] = '.';                 // small gap
-MAP[2][30] = '.'; MAP[2][31] = '.'; // wide gap
-MAP[2][36] = '^';                 // spikes
-fill(2, 23, 24, 'W');             // wall block: must be bypassed over the ledge
-fill(1, 20, 27, '#');             // ledge above the wall
-fill(1, 33, 37, '#');             // secret ledge with a potion
-fill(3, 10, 15, '^');             // spike pit under the small gap
-fill(3, 28, 33, '^');             // spike pit under the wide gap
+// ---------------------------------------------------------------- levels
+let MAP = [], TORCHES = [], DOOR = { c: 38, r: 2 }, HINTS = [];
+const blankMap = () => { const m = []; for (let r = 0; r < ROWS; r++) m.push(Array(COLS).fill('.')); return m; };
+const fillRow = (m, r, a, b, ch) => { for (let c = a; c <= b; c++) m[r][c] = ch; };
 
-const TORCHES = [[3, 2], [8, 2], [15, 2], [21, 2], [27, 2], [33, 2], [37, 2], [5, 0], [14, 0], [25, 0], [35, 0], [12, 4], [31, 4]];
-const DOOR = { c: 38, r: 2 };
+const LEVELS = [
+  {
+    name: 'THE DUNGEON',
+    map() {
+      const m = blankMap(), f = (r, a, b, ch) => fillRow(m, r, a, b, ch);
+      f(2, 0, 39, '#');
+      m[2][12] = '.';                   // small gap
+      m[2][30] = '.'; m[2][31] = '.';   // wide gap
+      m[2][36] = '^';                   // spikes
+      f(2, 23, 24, 'W');                // wall block: bypass it over the ledge
+      f(1, 20, 27, '#');                // ledge above the wall
+      f(1, 33, 37, '#');                // secret ledge with a potion
+      f(3, 10, 15, '^');                // spike pit under the small gap
+      f(3, 28, 33, '^');                // spike pit under the wide gap
+      return m;
+    },
+    torches: [[3, 2], [8, 2], [15, 2], [21, 2], [27, 2], [33, 2], [37, 2], [5, 0], [14, 0], [25, 0], [35, 0], [12, 4], [31, 4]],
+    door: { c: 38, r: 2 },
+    hints: [
+      { x0: 130, x1: 165, row: 2, text: 'ARROWS: RUN.  UP + ARROW: LEAP' },
+      { x0: 300, x1: 345, row: 2, text: 'HOLD AN ARROW AND PRESS UP TO LEAP' },
+      { x0: 560, x1: 598, row: 2, text: 'FACE THE LEDGE AND PRESS UP TO CLIMB' },
+      { x0: 880, x1: 915, row: 2, text: 'LEAP OVER THE GAP' },
+      { x0: 962, x1: 986, row: 2, text: 'PRESS UP HERE: A POTION IS ON THE LEDGE' },
+      { x0: 1035, x1: 1070, row: 2, text: 'SPIKES! LEAP OVER THEM' }
+    ],
+    enemies: [[17, 2, 3], [25, 1, 3], [35, 2, 3]],
+    items: [['sword', 6, 2], ['potion', 9, 2], ['potion', 22, 1], ['potion', 35, 1]]
+  },
+  {
+    name: 'THE FALLING HALLS',
+    map() {
+      const m = blankMap(), f = (r, a, b, ch) => fillRow(m, r, a, b, ch);
+      f(2, 0, 8, '#'); f(2, 11, 17, '#');
+      f(2, 18, 20, 'L');                // cracked floor: collapses under your feet
+      f(2, 24, 39, '#');
+      m[2][33] = '^'; m[2][36] = '.'; m[2][37] = '.';
+      f(2, 28, 29, 'W');                // wall: bypass it over the ledge
+      f(1, 26, 29, '#');
+      f(3, 8, 11, '^');                 // pit under the first gap
+      f(3, 17, 26, '#');                // lower hall, reached by falling
+      f(3, 34, 39, '^');                // pit under the last gap
+      return m;
+    },
+    torches: [[3, 2], [14, 2], [22, 3], [26, 2], [33, 2], [37, 2], [5, 0], [16, 0], [28, 0], [35, 0], [21, 4]],
+    door: { c: 38, r: 2 },
+    hints: [
+      { x0: 130, x1: 165, row: 2, text: 'THE FLOORS HERE ARE NOT ALL SAFE' },
+      { x0: 232, x1: 262, row: 2, text: 'LEAP OVER THE GAP' },
+      { x0: 480, x1: 515, row: 2, text: 'THE FLOOR AHEAD IS CRACKED...' },
+      { x0: 540, x1: 640, row: 3, text: 'FIND THE HOLE AND CLIMB BACK UP' },
+      { x0: 752, x1: 778, row: 2, text: 'FACE THE LEDGE AND PRESS UP TO CLIMB' },
+      { x0: 955, x1: 985, row: 2, text: 'SPIKES! LEAP OVER THEM' }
+    ],
+    enemies: [[14, 2, 3], [22, 3, 3], [28, 1, 4], [35, 2, 4]],
+    items: [['potion', 5, 2], ['potion', 20, 3], ['potion', 27, 1]]
+  }
+];
 
 const tile = (c, r) => (c < 0 || c >= COLS) ? 'W' : (r < 0 || r >= ROWS) ? '.' : MAP[r][c];
-const isFloor = (c, r) => { const t = tile(c, r); return t === '#' || t === '^'; };
+const isFloor = (c, r) => { const t = tile(c, r); return t === '#' || t === '^' || t === 'L'; };
 const rowOf = y => Math.floor((y - 8) / TH);
-
-const HINTS = [
-  { x0: 0, x1: 130, row: 2, text: 'ARROWS: RUN.  UP + ARROW: LEAP' },
-  { x0: 300, x1: 345, row: 2, text: 'HOLD AN ARROW AND PRESS UP TO LEAP' },
-  { x0: 560, x1: 598, row: 2, text: 'FACE THE LEDGE AND PRESS UP TO CLIMB' },
-  { x0: 880, x1: 915, row: 2, text: 'LEAP OVER THE GAP' },
-  { x0: 940, x1: 975, row: 2, text: 'EN GARDE! SPACE: STRIKE   X: PARRY' },
-  { x0: 1035, x1: 1070, row: 2, text: 'SPIKES! LEAP OVER THEM' }
-];
 
 // ---------------------------------------------------------------- audio (synth, no files)
 let ac = null, muted = false;
@@ -152,7 +190,8 @@ const sfx = {
   pick: () => { beep(520, 0.07, 'square', 0.05); setTimeout(() => beep(780, 0.12, 'square', 0.05), 70); },
   die: () => { beep(300, 0.5, 'sawtooth', 0.07, -250); },
   win: () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.18, 'square', 0.05), i * 120)),
-  climb: () => beep(200, 0.1, 'triangle', 0.05, 120)
+  climb: () => beep(200, 0.1, 'triangle', 0.05, 120),
+  crumble: () => { beep(90, 0.25, 'sawtooth', 0.06, -40); beep(60, 0.3, 'square', 0.04, -20); }
 };
 
 // ---------------------------------------------------------------- input
@@ -176,22 +215,23 @@ const held = (...codes) => codes.some(c => keys.has(c));
 let S = null, mode = 'title', frameN = 0;
 const cam = { x: 0, y: 0 };
 
-function mkEnemy(c, r) { return { x: c * TW + 15, y: r * TH + FL, dir: -1, hp: 3, state: 'idle', t: 0, cd: 45, phase: 0 }; }
+function mkEnemy(c, r, hp) { return { x: c * TW + 15, y: r * TH + FL, dir: -1, hp, maxhp: hp, state: 'idle', t: 0, cd: 45, phase: 0 }; }
 
-function newGame() {
+function newGame(lv = 0, carry) {
+  const L = LEVELS[lv];
+  MAP = L.map(); TORCHES = L.torches; DOOR = L.door; HINTS = L.hints;
+  buildBG();
+  const sword = carry ? carry.sword : false;
+  const maxhp = carry ? carry.maxhp : 5, hp = carry ? Math.max(3, carry.hp) : 3;
   S = {
-    h: { x: 45, y: 2 * TH + FL, vx: 0, vy: 0, dir: 1, state: 'ground', t: 0, lock: 0, hp: 3, maxhp: 5, phase: 0, invul: 0,
+    level: lv, start: { hp, maxhp, sword },
+    h: { x: 45, y: 2 * TH + FL, vx: 0, vy: 0, dir: 1, state: 'ground', t: 0, lock: 0, hp, maxhp, phase: 0, invul: 0,
          fallRow: 2, jumped: false, armed: false, parry: false, crouch: false, cs: null, lastStep: 0, moving: false },
-    hasSword: false,
-    enemies: [mkEnemy(17, 2), mkEnemy(25, 1), mkEnemy(35, 2)],
-    items: [
-      { k: 'sword', x: 6 * TW + 15, y: 2 * TH + FL },
-      { k: 'potion', x: 9 * TW + 15, y: 2 * TH + FL },
-      { k: 'potion', x: 22 * TW + 15, y: 1 * TH + FL },
-      { k: 'potion', x: 35 * TW + 15, y: 1 * TH + FL }
-    ],
-    parts: [], toast: { text: HINTS[0].text, t: 200 }, flash: 0, time: 600 * 60, door: 0, fade: 0,
-    hints: HINTS.map(h => Object.assign({ shown: h === HINTS[0] }, h)), reason: '', deadT: 0, nearFoe: null
+    hasSword: sword,
+    enemies: L.enemies.map(e => mkEnemy(e[0], e[1], e[2])),
+    items: L.items.map(i => ({ k: i[0], x: i[1] * TW + 15, y: i[2] * TH + FL })),
+    loose: {}, parts: [], toast: { text: 'LEVEL ' + (lv + 1) + ': ' + L.name, t: 110 }, flash: 0, time: 600 * 60, door: 0, fade: 0,
+    hints: L.hints.map(h => Object.assign({ shown: false }, h)), reason: '', deadT: 0, nearFoe: null
   };
   updateCam(true);
 }
@@ -237,7 +277,7 @@ function blocked(x, dir, y) { // wall in front?
 // ---------------------------------------------------------------- hero
 function canClimb() {
   const h = S.h, r = rowOf(h.y), c = Math.floor(h.x / TW), t = c + h.dir;
-  return r >= 1 && tile(t, r - 1) === '#' && !isFloor(c, r - 1) && tile(c, r - 1) !== 'W' && tile(c, r) !== 'W';
+  return r >= 1 && (tile(t, r - 1) === '#' || tile(t, r - 1) === 'L') && !isFloor(c, r - 1) && tile(c, r - 1) !== 'W' && tile(c, r) !== 'W';
 }
 
 function heroStrike() {
@@ -278,7 +318,7 @@ function updHero() {
     h.x += Math.sign(tx - h.x) * Math.min(0.7, Math.abs(tx - h.x));
     h.phase += 0.08;
     if (h.t > 70) S.fade = Math.min(1, S.fade + 0.03);
-    if (h.t > 130) { mode = 'win'; sfx.win(); }
+    if (h.t > 130) { sfx.win(); mode = S.level < LEVELS.length - 1 ? 'clear' : 'win'; }
     return;
   }
 
@@ -294,8 +334,9 @@ function updHero() {
       if (it.taken || Math.abs(it.y - h.y) > 8 || Math.abs(it.x - h.x) > 12) continue;
       if (it.k === 'sword') { it.taken = true; S.hasSword = true; sfx.pick(); toast('YOU FOUND A SWORD!  SPACE: STRIKE  X: PARRY', 220); }
       else if (it.k === 'potion') {
-        if (h.hp >= h.maxhp) continue;
-        it.taken = true; h.hp = Math.min(h.maxhp, h.hp + 1); sfx.pick(); burst(it.x, it.y - 8, C.green, 10, 1.2); toast('HEALTH RESTORED', 100);
+        it.taken = true; sfx.pick(); burst(it.x, it.y - 8, C.green, 10, 1.2);
+        if (h.hp >= h.maxhp) { h.maxhp = Math.min(7, h.maxhp + 1); h.hp = Math.min(h.maxhp, h.hp + 1); toast('MAX HEALTH UP!', 100); }
+        else { h.hp++; toast('HEALTH RESTORED', 100); }
       }
     }
   }
@@ -334,15 +375,22 @@ function updHero() {
       if (upE && row === DOOR.r && Math.abs(h.x - (DOOR.c * TW + 15)) < 14 && S.door > 0.8) {
         h.state = 'exit'; h.t = 0; h.armed = false; break;
       }
-      if (upE && !h.armed && !h.crouch) {
-        if (canClimb()) {
-          const r = rowOf(h.y), t = Math.floor(h.x / TW) + h.dir;
-          h.cs = { x0: h.x, y0: h.y, x1: t * TW + (h.dir > 0 ? 8 : TW - 8), y1: (r - 1) * TH + FL };
-          h.state = 'climb'; h.t = 0; sfx.climb(); break;
-        }
+      if (upE && canClimb()) {
+        const r = rowOf(h.y), t = Math.floor(h.x / TW) + h.dir;
+        h.cs = { x0: h.x, y0: h.y, x1: t * TW + (h.dir > 0 ? 8 : TW - 8), y1: (r - 1) * TH + FL };
+        h.state = 'climb'; h.t = 0; h.armed = false; sfx.climb(); break;
+      }
+      if (upE && (!h.armed || mv) && !h.crouch) {
         h.state = 'air'; h.vy = -3.4; h.vx = mv ? h.dir * 2.4 : 0; h.fallRow = row; h.jumped = true; sfx.jump(); break;
       }
 
+      // cracked floor collapses
+      const lc = Math.floor(h.x / TW);
+      if (tile(lc, row) === 'L') {
+        const k = row * COLS + lc;
+        S.loose[k] = (S.loose[k] || 0) + 1;
+        if (S.loose[k] >= 14) { MAP[row][lc] = '.'; buildBG(); sfx.crumble(); burst(lc * TW + 15, row * TH + FL + 2, C.sand, 16, 1.6); }
+      }
       // walked off an edge?
       if (!isFloor(Math.floor(h.x / TW), row)) {
         h.state = 'air'; h.vy = 0; h.vx = h.moving ? h.dir * 0.9 : 0; h.fallRow = row; h.jumped = false;
@@ -458,11 +506,15 @@ function updEnemy(e) {
 function update() {
   frameN++;
   if (mode === 'title') {
-    if (take('Enter', 'Space')) { newGame(); mode = 'play'; beep(440, 0.1); }
+    if (take('Enter', 'Space')) { newGame(0); mode = 'play'; beep(440, 0.1); }
     return;
   }
   if (mode === 'win') {
-    if (take('Enter')) { newGame(); mode = 'play'; }
+    if (take('Enter')) { newGame(0); mode = 'play'; }
+    return;
+  }
+  if (mode === 'clear') {
+    if (take('Enter')) { newGame(S.level + 1, { hp: S.h.hp, maxhp: S.h.maxhp, sword: S.hasSword }); mode = 'play'; }
     return;
   }
   if (mode === 'pause') { return; }
@@ -474,7 +526,7 @@ function update() {
     if (S.time <= 0) die('time');
   } else {
     S.deadT++;
-    if (S.deadT > 70 && take('Enter')) { newGame(); return; }
+    if (S.deadT > 70 && take('Enter')) { newGame(S.level, S.start); return; }
   }
   updHero();
   for (const e of S.enemies) updEnemy(e);
@@ -575,6 +627,10 @@ function buildBG() {
     R(x, y + 2, 1, 4, C.sand3);
     R(x + 15, y + 2, 1, 3, C.sand3);
     if (hash(c, r, 1) % 3 === 0) R(x + 4, y, 6, 1, '#e0c58f');
+    if (tile(c, r) === 'L') {
+      R(x + 7, y, 1, 4, C.sand3); R(x + 8, y + 3, 3, 1, C.sand3); R(x + 14, y, 2, 2, C.s0);
+      R(x + 21, y, 1, 5, C.sand3); R(x + 20, y + 4, 2, 1, C.sand3);
+    }
     if (tile(c, r) === '^') {
       for (let i = 0; i < 4; i++) {
         const sx = x + 3 + i * 7;
@@ -770,10 +826,10 @@ function drawHUD() {
   px(0, SH, W, 1, C.s3);
   drawHearts(S.h.hp, S.h.maxhp, 6, 187, C.red, 1);
   const foe = S.nearFoe && S.nearFoe.state !== 'dead' ? S.nearFoe : null;
-  if (foe) drawHearts(foe.hp, 3, W - 6, 187, C.blue, -1);
+  if (foe) drawHearts(foe.hp, foe.maxhp, W - 6, 187, C.blue, -1);
   const secs = Math.max(0, Math.ceil(S.time / 60));
   const t = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
-  text('TIME ' + t, W / 2, 189, secs < 60 && frameN % 40 < 20 ? C.red : C.sand, 1, 'c');
+  text('LV' + (S.level + 1) + '  TIME ' + t, W / 2, 189, secs < 60 && frameN % 40 < 20 ? C.red : C.sand, 1, 'c');
   if (S.toast) {
     const w = S.toast.text.length * 4 + 8;
     const a = Math.min(1, S.toast.t / 20);
@@ -817,10 +873,10 @@ function render() {
     text('PAUSED', W / 2, 78, C.white, 3, 'c');
     text('PRESS P TO CONTINUE', W / 2, 108, C.yellow, 1, 'c');
   }
-  if (mode === 'win') drawWin();
+  if (mode === 'win' || mode === 'clear') drawWin(mode === 'clear');
 }
 
-function drawWin() {
+function drawWin(clear) {
   px(0, 0, W, H, C.k);
   for (let i = 0; i < 40; i++) {
     const x = (hash(i, 1, 1) % W), y = (hash(i, 2, 2) % 130), tw = (frameN >> 4) + i;
@@ -828,11 +884,11 @@ function drawWin() {
   }
   px(0, 150, W, 50, C.sand2); px(0, 150, W, 2, C.sand);
   const secs = Math.ceil(S.time / 60);
-  text('YOU ESCAPED!', W / 2, 40, C.yellow, 3, 'c');
-  text('THE DUNGEON IS BEHIND YOU.', W / 2, 78, C.white, 1, 'c');
+  text(clear ? 'LEVEL ' + (S.level + 1) + ' CLEAR!' : 'YOU ESCAPED!', W / 2, 40, C.yellow, 3, 'c');
+  text(clear ? 'BUT THE NEXT DUNGEON IS DEEPER...' : 'BOTH DUNGEONS ARE BEHIND YOU.', W / 2, 78, C.white, 1, 'c');
   text('TIME LEFT ' + String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0'), W / 2, 94, C.sand, 1, 'c');
   fig(150, 150, 1, runPose(frameN * 0.12), PAL_H);
-  if (frameN % 60 < 40) text('PRESS ENTER TO PLAY AGAIN', W / 2, 172, C.yellow, 1, 'c');
+  if (frameN % 60 < 40) text(clear ? 'PRESS ENTER FOR LEVEL ' + (S.level + 2) : 'PRESS ENTER TO PLAY AGAIN', W / 2, 172, C.yellow, 1, 'c');
 }
 
 function drawTitle() {
@@ -841,7 +897,7 @@ function drawTitle() {
   drawTorches(); cam.x = saveCam;
   ctx.globalAlpha = 0.45; px(0, 0, W, H, C.k); ctx.globalAlpha = 1;
   text('DUNE PRINCE', W / 2, 22, C.yellow, 4, 'c');
-  text('ESCAPE THE DUNGEON IN 10 MINUTES', W / 2, 54, C.white, 1, 'c');
+  text('ESCAPE 2 DUNGEONS. 10 MINUTES EACH', W / 2, 54, C.white, 1, 'c');
   px(70, 70, 160, 84, C.k); px(70, 70, 160, 1, C.s4); px(70, 153, 160, 1, C.s4); px(70, 70, 1, 84, C.s4); px(229, 70, 1, 84, C.s4);
   const rows = [['LEFT/RIGHT', 'RUN'], ['UP', 'JUMP / CLIMB'], ['UP + ARROW', 'LEAP'], ['DOWN', 'CROUCH'], ['SHIFT', 'SNEAK'], ['SPACE', 'STRIKE'], ['X', 'PARRY'], ['P / M', 'PAUSE / SOUND']];
   rows.forEach((r, i) => { text(r[0], 82, 76 + i * 9, C.sand, 1, 'l', false); text(r[1], 218, 76 + i * 9, C.white, 1, 'r', false); });
@@ -851,8 +907,7 @@ function drawTitle() {
 }
 
 // ---------------------------------------------------------------- loop
-buildBG();
-newGame();
+newGame(0);
 let last = performance.now(), acc = 0;
 function loop(now) {
   acc += Math.min(100, now - last); last = now;
