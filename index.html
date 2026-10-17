@@ -182,6 +182,12 @@ function beep(f, d, type = 'square', v = 0.05, slide = 0) {
     o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d);
   } catch (e) { /* audio unavailable */ }
 }
+function unlockAudio() {
+  try {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state !== 'running') ac.resume();
+  } catch (e) { /* audio unavailable */ }
+}
 const sfx = {
   jump: () => beep(300, 0.14, 'square', 0.04, 260),
   step: () => beep(80, 0.03, 'triangle', 0.05),
@@ -200,6 +206,7 @@ const sfx = {
 const keys = new Set(), pressed = new Set();
 const BLOCK = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'KeyX', 'KeyZ', 'ShiftLeft', 'ShiftRight']);
 window.addEventListener('keydown', e => {
+  unlockAudio();
   if (BLOCK.has(e.code)) e.preventDefault();
   if (!e.repeat) pressed.add(e.code);
   keys.add(e.code);
@@ -209,7 +216,8 @@ window.addEventListener('keydown', e => {
 }, { passive: false });
 window.addEventListener('keyup', e => { keys.delete(e.code); });
 window.addEventListener('blur', () => { keys.clear(); if (mode === 'play') mode = 'pause'; });
-cv.addEventListener('mousedown', () => cv.focus());
+cv.addEventListener('mousedown', () => { cv.focus(); unlockAudio(); });
+window.addEventListener('mousedown', unlockAudio);
 const take = (...codes) => { let r = false; for (const c of codes) if (pressed.has(c)) { pressed.delete(c); r = true; } return r; };
 const held = (...codes) => codes.some(c => keys.has(c));
 
@@ -857,6 +865,7 @@ function drawHUD() {
   const secs = Math.max(0, Math.ceil(S.time / 60));
   const t = String(Math.floor(secs / 60)).padStart(2, '0') + ':' + String(secs % 60).padStart(2, '0');
   text('LV' + (S.level + 1) + '  TIME ' + t, W / 2, 189, secs < 60 && frameN % 40 < 20 ? C.red : C.sand, 1, 'c');
+  if (muted) text('SOUND OFF - PRESS M', W - 4, 3, C.red, 1, 'r');
   if (S.toast) {
     const w = S.toast.text.length * 4 + 8;
     const a = Math.min(1, S.toast.t / 20);
