@@ -142,6 +142,7 @@ const LEVELS = [
       m[2][33] = '^'; m[2][36] = '.'; m[2][37] = '.';
       f(2, 28, 29, 'W');                // wall: bypass it over the ledge
       f(1, 26, 29, '#');
+      f(1, 12, 15, '#');                // ledge with the golden sword
       f(3, 8, 11, '^');                 // pit under the first gap
       f(3, 17, 26, '#');                // lower hall, reached by falling
       f(3, 34, 39, '^');                // pit under the last gap
@@ -152,13 +153,14 @@ const LEVELS = [
     hints: [
       { x0: 130, x1: 165, row: 2, text: 'THE FLOORS HERE ARE NOT ALL SAFE' },
       { x0: 232, x1: 262, row: 2, text: 'LEAP OVER THE GAP' },
+      { x0: 332, x1: 358, row: 2, text: 'SOMETHING GOLDEN SHINES UP THERE. PRESS UP!' },
       { x0: 480, x1: 515, row: 2, text: 'THE FLOOR AHEAD IS CRACKED...' },
-      { x0: 540, x1: 640, row: 3, text: 'FIND THE HOLE AND CLIMB BACK UP' },
+      { x0: 540, x1: 640, row: 3, text: 'DRINK THE GREEN ELIXIR. THEN CLIMB UP AT THE HOLE' },
       { x0: 752, x1: 778, row: 2, text: 'FACE THE LEDGE AND PRESS UP TO CLIMB' },
       { x0: 955, x1: 985, row: 2, text: 'SPIKES! LEAP OVER THEM' }
     ],
     enemies: [[14, 2, 3], [22, 3, 3], [28, 1, 4], [35, 2, 4]],
-    items: [['potion', 5, 2], ['potion', 20, 3], ['potion', 27, 1]]
+    items: [['potion', 5, 2], ['elixir', 20, 3], ['potion', 27, 1], ['sword2', 13, 1]]
   }
 ];
 
@@ -226,8 +228,8 @@ function newGame(lv = 0, carry) {
   S = {
     level: lv, start: { hp, maxhp, sword },
     h: { x: 45, y: 2 * TH + FL, vx: 0, vy: 0, dir: 1, state: 'ground', t: 0, lock: 0, hp, maxhp, phase: 0, invul: 0,
-         fallRow: 2, jumped: false, armed: false, parry: false, crouch: false, cs: null, lastStep: 0, moving: false },
-    hasSword: sword,
+         fallRow: 2, jumped: false, armed: false, parry: false, crouch: false, cs: null, lastStep: 0, moving: false, float: 0 },
+    hasSword: sword, swordLv: sword ? 1 : 0,
     enemies: L.enemies.map(e => mkEnemy(e[0], e[1], e[2])),
     items: L.items.map(i => ({ k: i[0], x: i[1] * TW + 15, y: i[2] * TH + FL })),
     loose: {}, parts: [], toast: { text: 'LEVEL ' + (lv + 1) + ': ' + L.name, t: 110 }, flash: 0, time: 600 * 60, door: 0, fade: 0,
@@ -297,7 +299,7 @@ function heroHit() {
       e.state = 'block'; e.t = 0; sfx.clang(); burst(e.x - e.dir * 8, e.y - 24, C.yellow, 8);
       continue;
     }
-    e.hp--; sfx.hit(); burst(e.x, e.y - 22, C.red, 12);
+    e.hp -= S.swordLv >= 2 ? 2 : 1; sfx.hit(); burst(e.x, e.y - 22, C.red, 12);
     if (e.hp <= 0) { e.state = 'dead'; e.t = 0; }
     else {
       e.state = 'hurt'; e.t = 0;
@@ -310,6 +312,7 @@ function heroHit() {
 function updHero() {
   const h = S.h;
   if (h.invul > 0) h.invul--;
+  if (h.float > 0) h.float--;
   h.t++;
 
   if (h.state === 'dead') return;
@@ -332,7 +335,9 @@ function updHero() {
   if (h.state === 'ground' || h.state === 'strike' || h.state === 'hurt') {
     for (const it of S.items) {
       if (it.taken || Math.abs(it.y - h.y) > 8 || Math.abs(it.x - h.x) > 12) continue;
-      if (it.k === 'sword') { it.taken = true; S.hasSword = true; sfx.pick(); toast('YOU FOUND A SWORD!  SPACE: STRIKE  X: PARRY', 220); }
+      if (it.k === 'sword') { it.taken = true; S.hasSword = true; S.swordLv = Math.max(S.swordLv, 1); sfx.pick(); toast('YOU FOUND A SWORD!  SPACE: STRIKE  X: PARRY', 220); }
+      else if (it.k === 'sword2') { it.taken = true; S.hasSword = true; S.swordLv = 2; sfx.pick(); burst(it.x, it.y - 8, C.yellow, 20, 1.8); toast('GOLDEN SWORD! TWICE AS DEADLY', 220); }
+      else if (it.k === 'elixir') { it.taken = true; h.float = 25 * 60; sfx.pick(); burst(it.x, it.y - 8, C.green, 16, 1.4); toast('GREEN ELIXIR! YOU FALL LIKE A FEATHER (25 S)', 220); }
       else if (it.k === 'potion') {
         it.taken = true; sfx.pick(); burst(it.x, it.y - 8, C.green, 10, 1.2);
         if (h.hp >= h.maxhp) { h.maxhp = Math.min(7, h.maxhp + 1); h.hp = Math.min(h.maxhp, h.hp + 1); toast('MAX HEALTH UP!', 100); }
@@ -406,6 +411,7 @@ function updHero() {
       if (h.vx && tile(Math.floor((nx + Math.sign(h.vx) * 5) / TW), rowOf(h.y)) === 'W') { nx = h.x; h.vx = 0; }
       h.x = nx;
       h.vy = Math.min(h.vy + (h.vy < 0 ? 0.2 : 0.22), 4.6);
+      if (h.float > 0 && !h.jumped && h.vy > 1.1) h.vy = 1.1;
       h.y += h.vy;
       if (h.vy > 0) {
         const c = Math.floor(h.x / TW);
@@ -413,7 +419,7 @@ function updHero() {
           const fy = r * TH + FL;
           if (prevY <= fy && h.y >= fy && isFloor(c, r)) {
             h.y = fy; h.vy = 0; h.vx = 0;
-            const rows = r - h.fallRow;
+            const rows = h.float > 0 ? 0 : r - h.fallRow;
             if (tile(c, r) === '^') { die('spikes'); break; }
             if (rows >= 3) { die('fall'); break; }
             sfx.land();
@@ -706,12 +712,13 @@ function fig(x, y, dir, p, pal) {
   if (p.sw) {
     const hnd = p.aF[1];
     const a = [X(hnd[0]), Y(hnd[1])], b = [X(p.sw.t[0]), Y(p.sw.t[1])];
-    line(a[0], a[1], b[0], b[1], C.steel, 1);
-    line(a[0], a[1] + 1, b[0], b[1] + 1, C.steel2, 1);
+    line(a[0], a[1], b[0], b[1], pal.blade || C.steel, 1);
+    line(a[0], a[1] + 1, b[0], b[1] + 1, pal.blade2 || C.steel2, 1);
     px(a[0] - 1, a[1] - 2, 2, 5, C.gold);
   }
 }
 const PAL_H = { shirt: C.white, shirt2: C.ice, pants: C.ice, pants2: C.s4, skin: C.skin, hair: C.hair, band: C.red, sash: C.red, boot: C.sand3 };
+const PAL_HG = Object.assign({}, PAL_H, { blade: C.yellow, blade2: C.gold });
 const PAL_G = { shirt: C.red, shirt2: C.red2, pants: C.blue, pants2: C.blue2, skin: C.skin2, hair: C.red2, band: C.gold, sash: C.gold, boot: C.k, stache: true };
 
 function drawHero() {
@@ -739,7 +746,10 @@ function drawHero() {
       else if (h.moving) p = runPose(h.phase);
       else p = P({ hip: [0, -15 + (Math.sin(frameN / 24) > 0.6 ? 0.5 : 0)] });
   }
-  fig(Math.round(h.x), Math.round(h.y), h.dir, p, PAL_H);
+  fig(Math.round(h.x), Math.round(h.y), h.dir, p, S.swordLv >= 2 ? PAL_HG : PAL_H);
+  if (h.float > 0 && h.state !== 'dead') {
+    for (let i = 0; i < 4; i++) px(h.x + Math.sin(frameN / 6 + i * 1.7) * 9, h.y - 4 - ((frameN * 0.6 + i * 9) % 36), 1, 1, i % 2 ? C.green : '#a5f3a0');
+  }
 }
 
 function drawEnemy(e) {
@@ -757,11 +767,11 @@ function drawEnemy(e) {
 }
 
 // ---------------------------------------------------------------- scene drawing
-function glow(x, y, a) {
+function glow(x, y, a, c1 = C.orange, c2 = C.yellow) {
   ctx.globalAlpha = a;
-  px(x - 24, y - 24, 48, 48, C.orange);
-  px(x - 16, y - 16, 32, 32, C.orange);
-  px(x - 8, y - 8, 16, 16, C.yellow);
+  px(x - 24, y - 24, 48, 48, c1);
+  px(x - 16, y - 16, 32, 32, c1);
+  px(x - 8, y - 8, 16, 16, c2);
   ctx.globalAlpha = 1;
 }
 function drawTorches() {
@@ -790,18 +800,31 @@ function drawDoorGate() {
 function drawItems() {
   for (const it of S.items) {
     if (it.taken) continue;
-    const bob = Math.sin(frameN / 14 + it.x) > 0 ? 1 : 0;
-    if (it.k === 'sword') {
-      px(it.x - 7, it.y - 3, 12, 1, C.steel); px(it.x - 7, it.y - 2, 12, 1, C.steel2);
-      px(it.x + 5, it.y - 5, 2, 5, C.gold); px(it.x + 7, it.y - 3, 3, 1, C.red);
-      if ((frameN >> 3) % 4 === 0) px(it.x - 8, it.y - 6 - bob, 1, 3, C.white), px(it.x - 9, it.y - 5 - bob, 3, 1, C.white);
+    const bob = Math.sin(frameN / 14 + it.x) > 0 ? 1 : 0, pulse = 0.1 + 0.04 * Math.sin(frameN / 10 + it.x);
+    const tw = (frameN >> 3) % 4 === 0;
+    if (it.k === 'sword' || it.k === 'sword2') {
+      const gold = it.k === 'sword2';
+      if (gold) glow(it.x, it.y - 6, pulse + 0.06, C.yellow, C.white);
+      const b1 = gold ? C.yellow : C.steel, b2 = gold ? C.gold : C.steel2;
+      px(it.x - 7, it.y - 3, 12, 1, b1); px(it.x - 7, it.y - 2, 12, 1, b2);
+      px(it.x + 5, it.y - 5, 2, 5, gold ? C.orange : C.gold); px(it.x + 7, it.y - 3, 3, 1, C.red);
+      if (tw) { px(it.x - 8, it.y - 8 - bob, 1, 3, C.white); px(it.x - 9, it.y - 7 - bob, 3, 1, C.white); }
+    } else if (it.k === 'elixir') {
+      glow(it.x, it.y - 7, pulse + 0.06, C.green, '#a5f3a0');
+      px(it.x - 1, it.y - 13, 3, 2, C.gold); px(it.x - 1, it.y - 11, 3, 3, C.ice);
+      px(it.x - 4, it.y - 8, 9, 8, C.green); px(it.x - 3, it.y - 9, 7, 1, C.green);
+      px(it.x - 4, it.y - 8, 1, 8, '#2f7d32'); px(it.x - 2, it.y - 7, 2, 3, '#a5f3a0');
+      px(it.x + 1, it.y - 16 - bob, 1, 1, '#a5f3a0'); if ((frameN >> 4) % 2) px(it.x - 2, it.y - 19 - bob, 1, 1, '#a5f3a0');
     } else {
-      px(it.x - 2, it.y - 9, 4, 2, C.ice);
-      px(it.x - 3, it.y - 7, 6, 7, C.red);
-      px(it.x - 3, it.y - 7, 1, 7, C.red2); px(it.x - 2, it.y - 6, 1, 2, '#ff8a80');
-      px(it.x - 1, it.y - 11 - bob, 1, 1, C.green);
-      if ((frameN >> 4) % 2) px(it.x + 1, it.y - 13 - bob, 1, 1, C.green);
+      glow(it.x, it.y - 6, pulse, C.red, '#ff8a80');
+      px(it.x - 1, it.y - 12, 3, 3, C.ice);
+      px(it.x - 3, it.y - 9, 7, 9, C.red);
+      px(it.x - 3, it.y - 9, 1, 9, C.red2); px(it.x - 1, it.y - 8, 1, 3, '#ff8a80');
+      px(it.x - 1, it.y - 15 - bob, 1, 1, C.white); if ((frameN >> 4) % 2) px(it.x + 1, it.y - 18 - bob, 1, 1, C.white);
     }
+    // bouncing arrow: "pick me up"
+    const ay = it.y - 24 - bob * 2;
+    px(it.x - 2, ay, 5, 1, C.yellow); px(it.x - 1, ay + 1, 3, 1, C.yellow); px(it.x, ay + 2, 1, 1, C.yellow);
   }
 }
 function drawParts() {
@@ -825,6 +848,10 @@ function drawHUD() {
   px(0, SH, W, 20, C.k);
   px(0, SH, W, 1, C.s3);
   drawHearts(S.h.hp, S.h.maxhp, 6, 187, C.red, 1);
+  if (S.h.float > 0) {
+    px(76 + 1, 184, 3, 2, C.ice); px(76, 186, 5, 6, C.green); px(77, 187, 1, 2, '#a5f3a0');
+    text(String(Math.ceil(S.h.float / 60)), 84, 187, C.green, 1, 'l', false);
+  }
   const foe = S.nearFoe && S.nearFoe.state !== 'dead' ? S.nearFoe : null;
   if (foe) drawHearts(foe.hp, foe.maxhp, W - 6, 187, C.blue, -1);
   const secs = Math.max(0, Math.ceil(S.time / 60));
